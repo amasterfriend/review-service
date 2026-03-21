@@ -48,3 +48,15 @@ func IsOrderReviewed(err error) bool {
 func ErrorOrderReviewed(format string, args ...interface{}) *errors.Error {
 	return errors.New(400, ErrorReason_ORDER_REVIEWED.String(), fmt.Sprintf(format, args...))
 }
+
+func IsReviewReplied(err error) bool {
+	if err == nil {
+		return false
+	}
+	e := errors.FromError(err)
+	return e.Reason == ErrorReason_REVIEW_REPLIED.String() && e.Code == 400
+}
+
+func ErrorReviewReplied(format string, args ...interface{}) *errors.Error {
+	return errors.New(400, ErrorReason_REVIEW_REPLIED.String(), fmt.Sprintf(format, args...))
+}

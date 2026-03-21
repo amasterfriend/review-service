@@ -18,7 +18,7 @@ func NewReviewService(uc *biz.ReviewUsecase) *ReviewService {
 	return &ReviewService{uc: uc}
 }
 
-// CreateReview 创建评价
+// CreateReview C端创建评价
 func (s *ReviewService) CreateReview(ctx context.Context, req *pb.CreateReviewRequest) (*pb.CreateReviewReply, error) {
 	fmt.Printf("[service] CreateReview: %v\n", req)
 	// 参数转换
@@ -47,7 +47,7 @@ func (s *ReviewService) CreateReview(ctx context.Context, req *pb.CreateReviewRe
 	return &pb.CreateReviewReply{ReviewID: review.ReviewID}, nil
 }
 
-// GetReview 获取评价详情
+// GetReview C端获取评价详情
 func (s *ReviewService) GetReview(ctx context.Context, req *pb.GetReviewRequest) (*pb.GetReviewReply, error) {
 	fmt.Printf("GetReview req:%#v\n", req)
 	review, err := s.uc.GetReview(ctx, req.ReviewID)
@@ -67,6 +67,24 @@ func (s *ReviewService) GetReview(ctx context.Context, req *pb.GetReviewRequest)
 		Status:       review.Status,
 	}}, nil
 }
+
+// ReplyReview B端回复评价
+func (s *ReviewService) ReplyReview(ctx context.Context, req *pb.ReplyReviewRequest) (*pb.ReplyReviewReply, error) {
+	fmt.Printf("[service] ReplyReview req:%#v\n", req)
+	// 调用biz层
+	reply, err := s.uc.CreateReply(ctx, &biz.ReplyParam{
+		ReviewID:  req.GetReviewID(),
+		StoreID:   req.GetStoreID(),
+		Content:   req.GetContent(),
+		PicInfo:   req.GetPicInfo(),
+		VideoInfo: req.GetVideoInfo(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &pb.ReplyReviewReply{ReplyID: reply.ReplyID}, nil
+}
+
 func (s *ReviewService) UpdateReview(ctx context.Context, req *pb.UpdateReviewRequest) (*pb.UpdateReviewReply, error) {
 	return &pb.UpdateReviewReply{}, nil
 }

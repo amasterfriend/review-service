@@ -24,13 +24,13 @@ service Review {
 			get: "/v1/review/{reviewID}"
 		};
 	}
-	// // B端回复评价
-	// rpc ReplyReview (ReplyReviewRequest) returns (ReplyReviewReply) {
-	// 	option (google.api.http) = {
-	// 		post: "/v1/review/reply",
-	// 		body: "*"
-	// 	};
-	// }
+	// B端回复评价
+	rpc ReplyReview (ReplyReviewRequest) returns (ReplyReviewReply) {
+		option (google.api.http) = {
+			post: "/v1/review/reply",
+			body: "*"
+		};
+	}
 	rpc UpdateReview (UpdateReviewRequest) returns (UpdateReviewReply);
 	rpc DeleteReview (DeleteReviewRequest) returns (DeleteReviewReply);
 	rpc ListReview (ListReviewRequest) returns (ListReviewReply);
@@ -77,6 +77,20 @@ message ReviewInfo{
 	string picInfo = 8;
 	string videoInfo = 9;
 	int32 status = 10;
+}
+
+// 回复评价的请求
+message ReplyReviewRequest{
+	int64 reviewID = 1 [(validate.rules).int64 = {gt: 0}];
+	int64 storeID = 2 [(validate.rules).int64 = {gt: 0}];
+	string content = 3 [(validate.rules).string = {min_len: 2, max_len:200}];
+	string picInfo = 4;
+	string videoInfo = 5;
+}
+
+// 回复评价的返回值
+message ReplyReviewReply{
+	int64 replyID = 1;
 }
 
 message UpdateReviewRequest {}

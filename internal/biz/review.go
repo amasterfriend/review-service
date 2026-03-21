@@ -14,6 +14,7 @@ type ReviewRepo interface {
 	SaveReview(context.Context, *model.ReviewInfo) (*model.ReviewInfo, error)
 	GetReviewByOrderID(context.Context, int64) ([]*model.ReviewInfo, error)
 	GetReview(context.Context, int64) (*model.ReviewInfo, error)
+	SaveReply(context.Context, *model.ReviewReplyInfo) (*model.ReviewReplyInfo, error)
 }
 
 type ReviewUsecase struct {
@@ -28,7 +29,7 @@ func NewReviewUsecase(repo ReviewRepo, logger log.Logger) *ReviewUsecase {
 	}
 }
 
-// CreateReview 创建评价
+// CreateReview C端创建评价
 // 实现业务逻辑的地方
 // service层调用该方法
 func (uc *ReviewUsecase) CreateReview(ctx context.Context, review *model.ReviewInfo) (*model.ReviewInfo, error) {
@@ -55,8 +56,38 @@ func (uc *ReviewUsecase) CreateReview(ctx context.Context, review *model.ReviewI
 	return uc.repo.SaveReview(ctx, review)
 }
 
-// GetReview 根据评价ID获取评价
+// GetReview C端根据评价ID获取评价
 func (uc *ReviewUsecase) GetReview(ctx context.Context, reviewID int64) (*model.ReviewInfo, error) {
 	uc.log.WithContext(ctx).Debugf("[biz] GetReview reviewID:%v", reviewID)
 	return uc.repo.GetReview(ctx, reviewID)
+}
+
+// CreateReply B端创建评价回复
+func (uc *ReviewUsecase) CreateReply(ctx context.Context, param *ReplyParam) (*model.ReviewReplyInfo, error) {
+	// 调用data层创建一个评价的回复
+	uc.log.WithContext(ctx).Debugf("[biz] CreateReply param:%v", param)
+	// 1. 数据校验
+	// 1.1 数据合法性校验（已回复的评价不允许商家再次回复）
+	// 先用评价ID查库，看下是否已经回复
+	review, err := uc.repo.GetReview(ctx, param.ReviewID)
+	if err != nil {
+		return nil, v1.ErrorDbFailed("查询数据库失败")
+	}
+	if review.HasReply == 1 {
+		return nil, v1.ErrorReviewReplied("评价:%d已回复", param.ReviewID)
+	}
+	// 1.2 水平越权校验（A商家只能回复自己的不能回复B商家的）
+	// 举例子：用户A删除订单，userID + orderID 当条件去查询订单然后删除
+	if review.StoreID != param.StoreID {
+		return nil, v1.ErrorReviewReplied("商家:%d无权回复评价:%d", param.StoreID, param.ReviewID)
+	}
+	reply := &model.ReviewReplyInfo{
+		ReplyID:   snowflake.GenID(),
+		ReviewID:  param.ReviewID,
+		StoreID:   param.StoreID,
+		Content:   param.Content,
+		PicInfo:   param.PicInfo,
+		VideoInfo: param.VideoInfo,
+	}
+	return uc.repo.SaveReply(ctx, reply)
 }
