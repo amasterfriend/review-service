@@ -40,7 +40,10 @@ func (s *ReviewService) CreateReview(ctx context.Context, req *pb.CreateReviewRe
 		Status:       0,
 	})
 	// 拼装返回结果
-	return &pb.CreateReviewReply{ReviewID: review.ReviewID}, err
+	if err != nil {
+		return nil, err
+	}
+	return &pb.CreateReviewReply{ReviewID: review.ReviewID}, nil
 }
 func (s *ReviewService) UpdateReview(ctx context.Context, req *pb.UpdateReviewRequest) (*pb.UpdateReviewReply, error) {
 	return &pb.UpdateReviewReply{}, nil
