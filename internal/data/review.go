@@ -35,3 +35,11 @@ func (r *reviewRepo) GetReviewByOrderID(ctx context.Context, orderID int64) ([]*
 		Where(r.data.query.ReviewInfo.OrderID.Eq(orderID)).
 		Find()
 }
+
+// GetReview 根据评价ID查询评价
+func (r *reviewRepo) GetReview(ctx context.Context, reviewID int64) (*model.ReviewInfo, error) {
+	return r.data.query.ReviewInfo.
+		WithContext(ctx).
+		Where(r.data.query.ReviewInfo.ReviewID.Eq(reviewID)).
+		First()
+}
