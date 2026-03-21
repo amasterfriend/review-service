@@ -5,6 +5,7 @@ go 1.22
 toolchain go1.24.6
 
 require (
+	github.com/bwmarrin/snowflake v0.3.0
 	github.com/go-kratos/kratos/v2 v2.9.2
 	github.com/google/wire v0.6.0
 	go.uber.org/automaxprocs v1.5.1
@@ -15,6 +16,7 @@ require (
 	gorm.io/driver/sqlite v1.5.4
 	gorm.io/gen v0.3.25
 	gorm.io/gorm v1.25.5
+	gorm.io/plugin/dbresolver v1.5.0
 )
 
 require (
@@ -45,5 +47,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gorm.io/datatypes v1.2.0 // indirect
 	gorm.io/hints v1.1.0 // indirect
-	gorm.io/plugin/dbresolver v1.5.0 // indirect
 )
