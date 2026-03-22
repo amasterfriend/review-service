@@ -24,6 +24,12 @@ service Review {
 			get: "/v1/review/{reviewID}"
 		};
 	}
+	// C端查看userID下所有评价
+	rpc ListReviewByUserID (ListReviewByUserIDRequest) returns (ListReviewByUserIDReply) {
+		option (google.api.http) = {
+			get: "/v1/{userID}/reviews",
+		};
+	}
 	// B端回复评价
 	rpc ReplyReview (ReplyReviewRequest) returns (ReplyReviewReply) {
 		option (google.api.http) = {
@@ -31,12 +37,30 @@ service Review {
 			body: "*"
 		};
 	}
-	rpc UpdateReview (UpdateReviewRequest) returns (UpdateReviewReply);
-	rpc DeleteReview (DeleteReviewRequest) returns (DeleteReviewReply);
-	rpc ListReview (ListReviewRequest) returns (ListReviewReply);
+	// B端申诉评价
+	rpc AppealReview (AppealReviewRequest) returns (AppealReviewReply) {
+		option (google.api.http) = {
+			post: "/v1/review/appeal",
+			body: "*"
+		};
+	}
+	// O端审核评价
+	rpc AuditReview (AuditReviewRequest) returns (AuditReviewReply) {
+		option (google.api.http) = {
+			post: "/v1/review/audit",
+			body: "*"
+		};
+	}
+	// O端评价申诉审核
+	rpc AuditAppeal (AuditAppealRequest) returns (AuditAppealReply) {
+		option (google.api.http) = {
+			post: "/v1/appeal/audit",
+			body: "*"
+		};
+	}
 }
 
-// 创建评价的请求
+// C端创建评价的请求
 message CreateReviewRequest {
 	int64 userID = 1 [(validate.rules).int64 = {gt: 0}];
 	int64 orderID = 2 [(validate.rules).int64 = {gt: 0}];
@@ -50,19 +74,31 @@ message CreateReviewRequest {
 	bool anonymous = 10;
 }
 
-// 创建评价的回复
+// C端创建评价的响应
 message CreateReviewReply {
 	int64 reviewID = 1;
 }
 
-// 获取评价详情的请求
+// C端获取评价详情的请求
 message GetReviewRequest {
 	int64 reviewID = 1 [(validate.rules).int64 = {gt: 0}];
 }
 
-// 获取评价详情的回复
+// C端获取评价详情的响应
 message GetReviewReply {
 	ReviewInfo data = 1;
+}
+
+// C端查看userID下所有评价的请求
+message ListReviewByUserIDRequest {
+	int64 userID = 1 [(validate.rules).int64 = {gt: 0}];
+	int32 page = 2 [(validate.rules).int32 = {gt: 0}];
+	int32 size = 3 [(validate.rules).int32 = {gt: 0, lt: 100}];
+}
+
+// C端查看userID下所有评价的响应
+message ListReviewByUserIDReply {
+	repeated ReviewInfo list = 1;
 }
 
 // 评价信息
@@ -79,7 +115,7 @@ message ReviewInfo{
 	int32 status = 10;
 }
 
-// 回复评价的请求
+// B端回复评价的请求
 message ReplyReviewRequest{
 	int64 reviewID = 1 [(validate.rules).int64 = {gt: 0}];
 	int64 storeID = 2 [(validate.rules).int64 = {gt: 0}];
@@ -88,18 +124,51 @@ message ReplyReviewRequest{
 	string videoInfo = 5;
 }
 
-// 回复评价的返回值
+// B端回复评价的响应
 message ReplyReviewReply{
 	int64 replyID = 1;
 }
 
-message UpdateReviewRequest {}
-message UpdateReviewReply {}
+// B端申诉评价的请求
+message AppealReviewRequest{
+	int64 reviewID = 1 [(validate.rules).int64 = {gt: 0}];
+	int64 storeID = 2 [(validate.rules).int64 = {gt: 0}];
+	string reason = 3 [(validate.rules).string = {min_len: 2, max_len:200}];
+	string content = 4 [(validate.rules).string = {min_len: 2, max_len:200}];
+	string picInfo = 5;
+	string videoInfo = 6;
+}
 
-message DeleteReviewRequest {}
-message DeleteReviewReply {}
+// B端申诉评价的响应
+message AppealReviewReply{
+	int64 appealID = 1;
+}
 
+// O端审核评价的请求
+message AuditReviewRequest{
+	int64 reviewID = 1 [(validate.rules).int64 = {gt: 0}];
+	int32 status = 2 [(validate.rules).int32 = {gt: 0}];
+	string opUser = 3 [(validate.rules).string = {min_len: 2}];
+	string opReason = 4 [(validate.rules).string = {min_len: 2}];
+	optional string opRemarks = 5;
+}
 
+// O端审核评价的响应
+message AuditReviewReply{
+	int64 reviewID = 1;
+	int32 status = 2;
+}
 
-message ListReviewRequest {}
-message ListReviewReply {}
+// O端审核申诉评价的请求
+message AuditAppealRequest{
+	int64 appealID = 1 [(validate.rules).int64 = {gt: 0}];
+	int64 reviewID = 2 [(validate.rules).int64 = {gt: 0}];
+	int32 status = 3 [(validate.rules).int32 = {gt: 0}];
+	string opUser = 4 [(validate.rules).string = {min_len: 2}];
+	optional string opRemarks = 5;
+}
+
+// O端审核申诉评价的响应
+message AuditAppealReply{
+	int64 appealID = 1;
+}

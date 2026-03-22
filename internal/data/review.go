@@ -69,3 +69,43 @@ func (r *reviewRepo) SaveReply(ctx context.Context, reply *model.ReviewReplyInfo
 	})
 	return reply, err
 }
+
+// AuditReview 审核评价（运营对用户的评价进行审核）
+func (r *reviewRepo) AuditReview(ctx context.Context, param *biz.AuditParam) error {
+	_, err := r.data.query.ReviewInfo.
+		WithContext(ctx).
+		Where(r.data.query.ReviewInfo.ReviewID.Eq(param.ReviewID)).
+		Updates(map[string]interface{}{
+			"status":     param.Status,
+			"op_user":    param.OpUser,
+			"op_reason":  param.OpReason,
+			"op_remarks": param.OpRemarks,
+		})
+	return err
+}
+
+// AuditAppeal 审核申诉（运营对商家的申诉进行审核，审核通过会隐藏该评价）
+func (r *reviewRepo) AuditAppeal(ctx context.Context, param *biz.AuditAppealParam) error {
+	err := r.data.query.Transaction(func(tx *query.Query) error {
+		// 申诉表
+		if _, err := tx.ReviewAppealInfo.
+			WithContext(ctx).
+			Where(r.data.query.ReviewAppealInfo.AppealID.Eq(param.AppealID)).
+			Updates(map[string]interface{}{
+				"status":  param.Status,
+				"op_user": param.OpUser,
+			}); err != nil {
+			return err
+		}
+		// 评价表
+		if param.Status == 20 { // 申诉通过则需要隐藏评价
+			if _, err := tx.ReviewInfo.WithContext(ctx).
+				Where(tx.ReviewInfo.ReviewID.Eq(param.ReviewID)).
+				Update(tx.ReviewInfo.Status, 40); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return err
+}
