@@ -1,0 +1,29 @@
+services:
+
+  mysql:
+    image: mysql:8
+    container_name: review-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: review_db
+    ports:
+      - "3306:3306"
+    volumes:
+      - ~/review-mysql-data:/var/lib/mysql
+
+  redis:
+    image: redis:7
+    container_name: review-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - ~/review-redis-data:/data
+    command: redis-server --appendonly yes
+
+  review-consul:
+    image: consul:1.15.3
+    container_name: review-consul
+    ports:
+      - "8500:8500"
+      - "8600:8600/udp"
+    command: consul agent -dev -client=0.0.0.0
