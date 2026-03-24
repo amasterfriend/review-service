@@ -15,6 +15,7 @@ type ReviewRepo interface {
 	GetReviewByOrderID(context.Context, int64) ([]*model.ReviewInfo, error)
 	GetReview(context.Context, int64) (*model.ReviewInfo, error)
 	SaveReply(context.Context, *model.ReviewReplyInfo) (*model.ReviewReplyInfo, error)
+	AppealReview(context.Context, *AppealParam) (*model.ReviewAppealInfo, error)
 	AuditReview(context.Context, *AuditParam) error
 	AuditAppeal(context.Context, *AuditAppealParam) error
 }
@@ -94,11 +95,11 @@ func (uc *ReviewUsecase) CreateReply(ctx context.Context, param *ReplyParam) (*m
 	return uc.repo.SaveReply(ctx, reply)
 }
 
-// // AppealReview B端申诉评价
-// func (uc ReviewUsecase) AppealReview(ctx context.Context, param *AppealParam) (*model.ReviewAppealInfo, error) {
-// 	uc.log.WithContext(ctx).Debugf("[biz] AppealReview param:%v", param)
-// 	return uc.repo.AppealReview(ctx, param)
-// }
+// AppealReview B端申诉评价
+func (uc ReviewUsecase) AppealReview(ctx context.Context, param *AppealParam) (*model.ReviewAppealInfo, error) {
+	uc.log.WithContext(ctx).Debugf("[biz] AppealReview param:%v", param)
+	return uc.repo.AppealReview(ctx, param)
+}
 
 // AuditReview O端审核评价
 func (uc *ReviewUsecase) AuditReview(ctx context.Context, param *AuditParam) error {

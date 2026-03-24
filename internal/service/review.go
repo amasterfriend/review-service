@@ -110,23 +110,23 @@ func (s *ReviewService) ReplyReview(ctx context.Context, req *pb.ReplyReviewRequ
 	return &pb.ReplyReviewReply{ReplyID: reply.ReplyID}, nil
 }
 
-// // AppealReview B端申诉评价
-// func (s *ReviewService) AppealReview(ctx context.Context, req *pb.AppealReviewRequest) (*pb.AppealReviewReply, error) {
-// 	fmt.Printf("[service] AppealReview req:%#v\n", req)
-// 	ret, err := s.uc.AppealReview(ctx, &biz.AppealParam{
-// 		ReviewID:  req.GetReviewID(),
-// 		StoreID:   req.GetStoreID(),
-// 		Reason:    req.GetReason(),
-// 		Content:   req.GetContent(),
-// 		PicInfo:   req.GetPicInfo(),
-// 		VideoInfo: req.GetVideoInfo(),
-// 	})
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	fmt.Printf("[service] AppealReview ret:%v err:%v\n", ret, err)
-// 	return &pb.AppealReviewReply{AppealID: ret.AppealID}, nil
-// }
+// AppealReview B端申诉评价
+func (s *ReviewService) AppealReview(ctx context.Context, req *pb.AppealReviewRequest) (*pb.AppealReviewReply, error) {
+	fmt.Printf("[service] AppealReview req:%#v\n", req)
+	ret, err := s.uc.AppealReview(ctx, &biz.AppealParam{
+		ReviewID:  req.GetReviewID(),
+		StoreID:   req.GetStoreID(),
+		Reason:    req.GetReason(),
+		Content:   req.GetContent(),
+		PicInfo:   req.GetPicInfo(),
+		VideoInfo: req.GetVideoInfo(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("[service] AppealReview ret:%v err:%v\n", ret, err)
+	return &pb.AppealReviewReply{AppealID: ret.AppealID}, nil
+}
 
 // AuditReview O端审核评价
 func (s *ReviewService) AuditReview(ctx context.Context, req *pb.AuditReviewRequest) (*pb.AuditReviewReply, error) {

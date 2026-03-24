@@ -10,6 +10,7 @@ services:
       - "3306:3306"
     volumes:
       - ~/review-mysql-data:/var/lib/mysql
+      - ~/learn_go/review-repo/review-service/my.cnf:/etc/mysql/conf.d/my.cnf
 
   redis:
     image: redis:7
