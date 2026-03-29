@@ -2,12 +2,15 @@ package data
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"review-service/internal/biz"
 	"review-service/internal/data/model"
 	"review-service/internal/data/query"
 	"review-service/pkg/snowflake"
 
+	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 	"github.com/go-kratos/kratos/v2/log"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -47,6 +50,44 @@ func (r *reviewRepo) GetReview(ctx context.Context, reviewID int64) (*model.Revi
 		WithContext(ctx).
 		Where(r.data.query.ReviewInfo.ReviewID.Eq(reviewID)).
 		First()
+}
+
+// ListReviewByStoreID 根据商家ID查询评价列表
+func (r *reviewRepo) ListReviewByStoreID(ctx context.Context, storeID int64, offset, limit int) ([]*biz.MyReviewInfo, error) {
+	// 去ES里面查询评价
+	resp, err := r.data.elastic.Search().Index("review").
+		From(offset).
+		Size(limit).
+		Query(&types.Query{
+			Bool: &types.BoolQuery{
+				Filter: []types.Query{
+					{
+						Term: map[string]types.TermQuery{
+							"store_id": {
+								Value: storeID,
+							},
+						},
+					},
+				},
+			},
+		}).
+		Do(ctx)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("ListReviewByStoreID, es resp:%v\n", resp.Hits.Total.Value)
+	// 反序列化数据
+	// resp.Hits.Hits[0].Source_ ---> json.RawMessage ---> model.ReviewInfo
+	list := make([]*biz.MyReviewInfo, 0, resp.Hits.Total.Value)
+	for _, hit := range resp.Hits.Hits {
+		tmp := biz.MyReviewInfo{}
+		if err := json.Unmarshal(hit.Source_, &tmp); err != nil {
+			r.log.WithContext(ctx).Errorf("ListReviewByStoreID unmarshal review fail, err:%v", err)
+			continue
+		}
+		list = append(list, &tmp)
+	}
+	return list, nil
 }
 
 // SaveReply 保存商家回复

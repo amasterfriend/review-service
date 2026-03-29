@@ -6,6 +6,8 @@ import (
 	v1 "review-service/api/review/v1"
 	"review-service/internal/data/model"
 	"review-service/pkg/snowflake"
+	"strings"
+	"time"
 
 	"github.com/go-kratos/kratos/v2/log"
 )
@@ -18,6 +20,8 @@ type ReviewRepo interface {
 	AppealReview(context.Context, *AppealParam) (*model.ReviewAppealInfo, error)
 	AuditReview(context.Context, *AuditParam) error
 	AuditAppeal(context.Context, *AuditAppealParam) error
+	ListReviewByStoreID(context.Context, int64, int, int) ([]*MyReviewInfo, error)
+	// ListReviewByUserID(context.Context, int64, int32, int32) ([]*model.ReviewInfo, error)
 }
 
 type ReviewUsecase struct {
@@ -63,6 +67,72 @@ func (uc *ReviewUsecase) CreateReview(ctx context.Context, review *model.ReviewI
 func (uc *ReviewUsecase) GetReview(ctx context.Context, reviewID int64) (*model.ReviewInfo, error) {
 	uc.log.WithContext(ctx).Debugf("[biz] GetReview reviewID:%v", reviewID)
 	return uc.repo.GetReview(ctx, reviewID)
+}
+
+// // ListReviewByUserID 根据用户ID获取评论列表（分页）
+// func (uc *ReviewUsecase) ListReviewByUserID(ctx context.Context, userID int64, page int32, size int32) ([]*model.ReviewInfo, error) {
+// 	if page <= 0 {
+// 		page = 1
+// 	}
+// 	if size <= 0 || size > 50 {
+// 		size = 10
+// 	}
+// 	offset := (page - 1) * size
+// 	limit := size
+
+// 	uc.log.WithContext(ctx).Debugf("[biz] ListReviewByUserID, userID: %d, offset: %d, limit: %d", userID, offset, limit)
+// 	return uc.repo.ListReviewByUserID(ctx, userID, offset, limit)
+// }
+
+// ListReviewByStoreID 根据商家ID获取评论列表（分页）
+func (uc *ReviewUsecase) ListReviewByStoreID(ctx context.Context, storeID int64, page int32, size int32) ([]*MyReviewInfo, error) {
+	if page <= 0 {
+		page = 1
+	}
+	if size <= 0 || size > 50 {
+		size = 10
+	}
+	offset := (page - 1) * size
+	limit := size
+
+	uc.log.WithContext(ctx).Debugf("[biz] ListReviewByStoreID, storeID: %d, offset: %d, limit: %d", storeID, offset, limit)
+	return uc.repo.ListReviewByStoreID(ctx, storeID, int(offset), int(limit))
+}
+
+// 自定义评论信息, 用于解决 unmarshal error: parsing time "2025-07-03 22:58:19" as "2006-01-02T15:04:05Z07:00"
+type MyReviewInfo struct {
+	*model.ReviewInfo
+	CreateAt     MyTime `json:"create_at"`
+	UpdateAt     MyTime `json:"update_at"`
+	ID           int64  `json:"id,string"`
+	Version      int32  `json:"version,string"`
+	ReviewID     int64  `json:"review_id,string"`
+	Score        int32  `json:"score,string"`
+	ServiceScore int32  `json:"service_score,string"`
+	ExpressScore int32  `json:"express_score,string"`
+	HasMedia     int32  `json:"has_media,string"`
+	OrderID      int64  `json:"order_id,string"`
+	SkuID        int64  `json:"sku_id,string"`
+	SpuID        int64  `json:"spu_id,string"`
+	StoreID      int64  `json:"store_id,string"`
+	UserID       int64  `json:"user_id,string"`
+	Anonymous    int32  `json:"anonymous,string"`
+	Status       int32  `json:"status,string"`
+	IsDefault    int32  `json:"is_default,string"`
+	HasReply     int32  `json:"has_reply,string"`
+}
+
+type MyTime time.Time
+
+// UnmarshalJSON 自定义时间反序列化，解决es和go时间格式不一样的问题
+func (t *MyTime) UnmarshalJSON(data []byte) error {
+	s := strings.Trim(string(data), `"`)
+	tmp, err := time.Parse(time.DateTime, s)
+	if err != nil {
+		return err
+	}
+	*t = MyTime(tmp)
+	return nil
 }
 
 // CreateReply B端创建评价回复

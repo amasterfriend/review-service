@@ -93,6 +93,32 @@ func (s *ReviewService) GetReview(ctx context.Context, req *pb.GetReviewRequest)
 // 	return &pb.ListReviewByUserIDReply{List: list}, nil
 // }
 
+// ListReviewByStoreID C端根据商户ID分页查询评价列表
+func (s *ReviewService) ListReviewByStoreID(ctx context.Context, req *pb.ListReviewByStoreIDRequest) (*pb.ListReviewByStoreIDReply, error) {
+	fmt.Printf("[service] ListReviewByStoreID req:%#v\n", req)
+	dataList, err := s.uc.ListReviewByStoreID(ctx, req.GetStoreID(), req.GetPage(), req.GetSize())
+	if err != nil {
+		return nil, err
+	}
+	// format
+	list := make([]*pb.ReviewInfo, 0, len(dataList))
+	for _, review := range dataList {
+		list = append(list, &pb.ReviewInfo{
+			ReviewID:     review.ReviewID,
+			UserID:       review.UserID,
+			OrderID:      review.OrderID,
+			Score:        review.Score,
+			ServiceScore: review.ServiceScore,
+			ExpressScore: review.ExpressScore,
+			Content:      review.Content,
+			PicInfo:      review.PicInfo,
+			VideoInfo:    review.VideoInfo,
+			Status:       review.Status,
+		})
+	}
+	return &pb.ListReviewByStoreIDReply{List: list}, nil
+}
+
 // ReplyReview B端回复评价
 func (s *ReviewService) ReplyReview(ctx context.Context, req *pb.ReplyReviewRequest) (*pb.ReplyReviewReply, error) {
 	fmt.Printf("[service] ReplyReview req:%#v\n", req)

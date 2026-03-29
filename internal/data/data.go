@@ -6,6 +6,7 @@ import (
 	"review-service/internal/data/query"
 	"strings"
 
+	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/google/wire"
 	"gorm.io/driver/mysql"
@@ -14,18 +15,19 @@ import (
 )
 
 // ProviderSet is data providers.
-var ProviderSet = wire.NewSet(NewData, NewReviewRepo, NewDB)
+var ProviderSet = wire.NewSet(NewData, NewReviewRepo, NewESClient, NewDB)
 
 // Data .
 type Data struct {
 	// TODO wrapped database client
 	// db *gorm.DB
-	query *query.Query
-	log   *log.Helper
+	query   *query.Query
+	log     *log.Helper
+	elastic *elasticsearch.TypedClient
 }
 
 // NewData .
-func NewData(db *gorm.DB, logger log.Logger) (*Data, func(), error) {
+func NewData(db *gorm.DB, esClient *elasticsearch.TypedClient, logger log.Logger) (*Data, func(), error) {
 	cleanup := func() {
 		log.Info("closing the data resources")
 	}
@@ -33,7 +35,17 @@ func NewData(db *gorm.DB, logger log.Logger) (*Data, func(), error) {
 	// 非常重要!为GEN生成的query代码设置数据库连接对象
 	query.SetDefault(db)
 
-	return &Data{query: query.Q, log: log.NewHelper(logger)}, cleanup, nil
+	return &Data{query: query.Q, elastic: esClient, log: log.NewHelper(logger)}, cleanup, nil
+}
+
+func NewESClient(cfg *conf.ElasticSearch) (*elasticsearch.TypedClient, error) {
+	es, err := elasticsearch.NewTypedClient(elasticsearch.Config{
+		Addresses: cfg.Addresses,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return es, nil
 }
 
 func NewDB(cfg *conf.Data) (*gorm.DB, error) {
