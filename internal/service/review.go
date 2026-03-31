@@ -157,7 +157,7 @@ func (s *ReviewService) AppealReview(ctx context.Context, req *pb.AppealReviewRe
 // AuditReview O端审核评价
 func (s *ReviewService) AuditReview(ctx context.Context, req *pb.AuditReviewRequest) (*pb.AuditReviewReply, error) {
 	fmt.Printf("AuditReview req:%#v\n", req)
-	err := s.uc.AuditReview(ctx, &biz.AuditParam{
+	res, err := s.uc.AuditReview(ctx, &biz.AuditParam{
 		ReviewID:  req.GetReviewID(),
 		OpUser:    req.GetOpUser(),
 		OpReason:  req.GetOpReason(),
@@ -169,7 +169,7 @@ func (s *ReviewService) AuditReview(ctx context.Context, req *pb.AuditReviewRequ
 	}
 	return &pb.AuditReviewReply{
 		ReviewID: req.ReviewID,
-		Status:   req.Status,
+		Status:   res.Status,
 	}, nil
 }
 

@@ -7,6 +7,7 @@ package main
 
 import (
 	"review-service/internal/biz"
+	"review-service/internal/client/ai"
 	"review-service/internal/conf"
 	"review-service/internal/data"
 	"review-service/internal/server"
@@ -19,5 +20,5 @@ import (
 
 // wireApp init kratos application.
 func wireApp(*conf.Server, *conf.Registry, *conf.Data, *conf.ElasticSearch, log.Logger) (*kratos.App, func(), error) {
-	panic(wire.Build(server.ProviderSet, data.ProviderSet, biz.ProviderSet, service.ProviderSet, newApp))
+	panic(wire.Build(server.ProviderSet, data.ProviderSet, ai.ProviderSet, biz.ProviderSet, service.ProviderSet, newApp))
 }

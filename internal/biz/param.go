@@ -36,3 +36,10 @@ type AuditAppealParam struct {
 	OpUser   string
 	Status   int32
 }
+
+// AIAuditResult AI审核结果
+type AIAuditResult struct {
+	SuggestedStatus int32
+	Reason          string
+	Risk            string
+}

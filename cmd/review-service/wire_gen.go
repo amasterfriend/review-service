@@ -10,6 +10,7 @@ import (
 	"github.com/go-kratos/kratos/v2"
 	"github.com/go-kratos/kratos/v2/log"
 	"review-service/internal/biz"
+	"review-service/internal/client/ai"
 	"review-service/internal/conf"
 	"review-service/internal/data"
 	"review-service/internal/server"
@@ -42,7 +43,11 @@ func wireApp(confServer *conf.Server, registry *conf.Registry, confData *conf.Da
 		return nil, nil, err
 	}
 	reviewRepo := data.NewReviewRepo(dataData, logger)
-	reviewUsecase := biz.NewReviewUsecase(reviewRepo, logger)
+	reviewAIAuditor, err := ai.NewAIAuditor(logger)
+	if err != nil {
+		return nil, nil, err
+	}
+	reviewUsecase := biz.NewReviewUsecase(reviewRepo, reviewAIAuditor, logger)
 	reviewService := service.NewReviewService(reviewUsecase)
 	grpcServer := server.NewGRPCServer(confServer, reviewService, logger)
 	httpServer := server.NewHTTPServer(confServer, reviewService, logger)

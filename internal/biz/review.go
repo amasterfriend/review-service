@@ -2,6 +2,7 @@ package biz
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	v1 "review-service/api/review/v1"
 	"review-service/internal/data/model"
@@ -18,21 +19,27 @@ type ReviewRepo interface {
 	GetReview(context.Context, int64) (*model.ReviewInfo, error)
 	SaveReply(context.Context, *model.ReviewReplyInfo) (*model.ReviewReplyInfo, error)
 	AppealReview(context.Context, *AppealParam) (*model.ReviewAppealInfo, error)
-	AuditReview(context.Context, *AuditParam) error
+	AuditReview(context.Context, *AuditParam) (*model.ReviewInfo, error)
 	AuditAppeal(context.Context, *AuditAppealParam) error
 	ListReviewByStoreID(context.Context, int64, int, int) ([]*MyReviewInfo, error)
 	// ListReviewByUserID(context.Context, int64, int32, int32) ([]*model.ReviewInfo, error)
 }
 
-type ReviewUsecase struct {
-	repo ReviewRepo
-	log  *log.Helper
+type ReviewAIAuditor interface {
+	AuditReview(context.Context, *model.ReviewInfo) (*AIAuditResult, error)
 }
 
-func NewReviewUsecase(repo ReviewRepo, logger log.Logger) *ReviewUsecase {
+type ReviewUsecase struct {
+	repo      ReviewRepo
+	aiAuditor ReviewAIAuditor
+	log       *log.Helper
+}
+
+func NewReviewUsecase(repo ReviewRepo, aiAuditor ReviewAIAuditor, logger log.Logger) *ReviewUsecase {
 	return &ReviewUsecase{
-		repo: repo,
-		log:  log.NewHelper(logger),
+		repo:      repo,
+		aiAuditor: aiAuditor,
+		log:       log.NewHelper(logger),
 	}
 }
 
@@ -172,8 +179,32 @@ func (uc ReviewUsecase) AppealReview(ctx context.Context, param *AppealParam) (*
 }
 
 // AuditReview O端审核评价
-func (uc *ReviewUsecase) AuditReview(ctx context.Context, param *AuditParam) error {
+func (uc *ReviewUsecase) AuditReview(ctx context.Context, param *AuditParam) (*model.ReviewInfo, error) {
 	uc.log.WithContext(ctx).Debugf("[biz] AuditReview param:%v", param)
+	review, err := uc.repo.GetReview(ctx, param.ReviewID)
+	if err != nil {
+		return nil, v1.ErrorDbFailed("查询数据库失败")
+	}
+	// 数据校验
+	if review.Status != 10 {
+		return nil, errors.New("只有待审核状态的评论才能进行审核")
+	}
+	ret, err := uc.aiAuditor.AuditReview(ctx, review)
+	if err != nil {
+		return nil, err
+	}
+
+	param.Status = ret.SuggestedStatus
+	if ret.SuggestedStatus == 20 {
+		param.OpReason = ret.Reason
+		param.OpRemarks = "AI审核通过"
+	} else {
+		param.OpReason = ret.Reason
+		param.OpRemarks = "AI审核不通过"
+	}
+	if param.OpUser == "" {
+		param.OpUser = "AI"
+	}
 	return uc.repo.AuditReview(ctx, param)
 }
 

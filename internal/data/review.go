@@ -289,8 +289,8 @@ func (r *reviewRepo) AppealReview(ctx context.Context, param *biz.AppealParam) (
 }
 
 // AuditReview 审核评价（运营对用户的评价进行审核）
-func (r *reviewRepo) AuditReview(ctx context.Context, param *biz.AuditParam) error {
-	_, err := r.data.query.ReviewInfo.
+func (r *reviewRepo) AuditReview(ctx context.Context, param *biz.AuditParam) (*model.ReviewInfo, error) {
+	res, err := r.data.query.ReviewInfo.
 		WithContext(ctx).
 		Where(r.data.query.ReviewInfo.ReviewID.Eq(param.ReviewID)).
 		Updates(map[string]interface{}{
@@ -299,7 +299,13 @@ func (r *reviewRepo) AuditReview(ctx context.Context, param *biz.AuditParam) err
 			"op_reason":  param.OpReason,
 			"op_remarks": param.OpRemarks,
 		})
-	return err
+	if err != nil {
+		return nil, err
+	}
+	if res.RowsAffected == 0 {
+		return nil, fmt.Errorf("update failed, no rows affected")
+	}
+	return r.GetReview(ctx, param.ReviewID) // 审核完后查询一次
 }
 
 // AuditAppeal 审核申诉（运营对商家的申诉进行审核，审核通过会隐藏该评价）
