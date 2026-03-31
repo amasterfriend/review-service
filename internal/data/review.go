@@ -5,13 +5,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	"review-service/internal/biz"
 	"review-service/internal/data/model"
 	"review-service/internal/data/query"
 	"review-service/pkg/snowflake"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 	"github.com/go-kratos/kratos/v2/log"
+	"github.com/redis/go-redis/v9"
+	"golang.org/x/sync/singleflight"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -52,8 +58,9 @@ func (r *reviewRepo) GetReview(ctx context.Context, reviewID int64) (*model.Revi
 		First()
 }
 
-// ListReviewByStoreID 根据商家ID查询评价列表
-func (r *reviewRepo) ListReviewByStoreID(ctx context.Context, storeID int64, offset, limit int) ([]*biz.MyReviewInfo, error) {
+var g singleflight.Group
+
+func (r *reviewRepo) getData1(ctx context.Context, storeID int64, offset, limit int) ([]*biz.MyReviewInfo, error) {
 	// 去ES里面查询评价
 	resp, err := r.data.elastic.Search().Index("review").
 		From(offset).
@@ -88,6 +95,114 @@ func (r *reviewRepo) ListReviewByStoreID(ctx context.Context, storeID int64, off
 		list = append(list, &tmp)
 	}
 	return list, nil
+}
+
+// 升级版带缓存版本的查询函数
+func (r *reviewRepo) getData2(ctx context.Context, storeID int64, offset, limit int) ([]*biz.MyReviewInfo, error) {
+	// 取数据
+	// 1. 先从缓存中查询数据
+	// 2. 如果缓存中没有，再查询ES
+	// 3. 通过singleflight合并短时间内大量并发请求
+	key := fmt.Sprintf("review:%d:%d:%d", storeID, offset, limit)
+	val, err := r.getDataBySingleflight(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	hm := new(types.HitsMetadata)
+	if err := json.Unmarshal(val, hm); err != nil {
+		return nil, err
+	}
+	// 反序列化数据
+	list := make([]*biz.MyReviewInfo, 0, hm.Total.Value)
+	for _, hit := range hm.Hits {
+		tmp := &biz.MyReviewInfo{}
+		if err := json.Unmarshal(hit.Source_, tmp); err != nil {
+			r.log.Errorf("json.Unmarshal fail, err:%v", err)
+			continue
+		}
+		list = append(list, tmp)
+	}
+	return list, nil
+}
+
+func (r *reviewRepo) getDataBySingleflight(ctx context.Context, key string) ([]byte, error) {
+	v, err, shared := g.Do(key, func() (interface{}, error) {
+		// 先从缓存中查询数据
+		val, err := r.getDataFromCache(ctx, key)
+		if err == nil {
+			return val, nil
+		}
+		// 如果缓存中没有这个key，再查询ES
+		if errors.Is(err, redis.Nil) {
+			r.log.Debugf("cache miss for key:%s", key)
+			data, err := r.getDataFromES(ctx, key)
+			if err == nil {
+				// 返回结果，设置缓存
+				return data, r.setCache(ctx, key, data)
+			}
+			return nil, err
+		}
+		// 其他错误，直接返回错误，不继续向下传导压力
+		return nil, err
+	})
+	r.log.Debugf("getDataBySingleflight, key:%s, val:%s, err:%v, shared:%v", key, string(v.([]byte)), err, shared)
+	return v.([]byte), err
+}
+
+// getDataFromCache 读缓存
+func (r *reviewRepo) getDataFromCache(ctx context.Context, key string) ([]byte, error) {
+	val, err := r.data.rdb.Get(ctx, key).Bytes()
+	r.log.Debugf("getDataFromCache, key:%s, val:%s, err:%v", key, string(val), err)
+	if err != nil {
+		return nil, err
+	}
+	return val, nil
+}
+
+// setCache 写缓存
+func (r *reviewRepo) setCache(ctx context.Context, key string, val []byte) error {
+	err := r.data.rdb.Set(ctx, key, val, time.Second*10).Err()
+	r.log.Debugf("setCache, key:%s, val:%s, err:%v", key, string(val), err)
+	return err
+}
+
+// getDataFromES 读ES
+func (r *reviewRepo) getDataFromES(ctx context.Context, key string) ([]byte, error) {
+	values := strings.Split(key, ":")
+	if len(values) < 4 {
+		return nil, errors.New("invalid key")
+	}
+	index, storeID, offsetStr, limitStr := values[0], values[1], values[2], values[3]
+	offset, _ := strconv.Atoi(offsetStr)
+	limit, _ := strconv.Atoi(limitStr)
+	resp, err := r.data.elastic.Search().
+		Index(index).
+		From(offset).
+		Size(limit).
+		Query(&types.Query{
+			Bool: &types.BoolQuery{
+				Filter: []types.Query{
+					{
+						Term: map[string]types.TermQuery{
+							"store_id": {
+								Value: storeID,
+							},
+						},
+					},
+				},
+			},
+		}).
+		Do(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(resp.Hits)
+}
+
+// ListReviewByStoreID 根据商家ID查询评价列表
+func (r *reviewRepo) ListReviewByStoreID(ctx context.Context, storeID int64, offset, limit int) ([]*biz.MyReviewInfo, error) {
+	// return r.getData1(ctx, storeID, offset, limit) // 直接查ES
+	return r.getData2(ctx, storeID, offset, limit) // 增加缓存和singleflight的版本
 }
 
 // SaveReply 保存商家回复

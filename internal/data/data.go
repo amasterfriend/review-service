@@ -9,13 +9,14 @@ import (
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/google/wire"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 // ProviderSet is data providers.
-var ProviderSet = wire.NewSet(NewData, NewReviewRepo, NewESClient, NewDB)
+var ProviderSet = wire.NewSet(NewData, NewReviewRepo, NewESClient, NewRedisClient, NewDB)
 
 // Data .
 type Data struct {
@@ -24,10 +25,11 @@ type Data struct {
 	query   *query.Query
 	log     *log.Helper
 	elastic *elasticsearch.TypedClient
+	rdb     *redis.Client
 }
 
 // NewData .
-func NewData(db *gorm.DB, esClient *elasticsearch.TypedClient, logger log.Logger) (*Data, func(), error) {
+func NewData(db *gorm.DB, esClient *elasticsearch.TypedClient, rdb *redis.Client, logger log.Logger) (*Data, func(), error) {
 	cleanup := func() {
 		log.Info("closing the data resources")
 	}
@@ -35,7 +37,7 @@ func NewData(db *gorm.DB, esClient *elasticsearch.TypedClient, logger log.Logger
 	// 非常重要!为GEN生成的query代码设置数据库连接对象
 	query.SetDefault(db)
 
-	return &Data{query: query.Q, elastic: esClient, log: log.NewHelper(logger)}, cleanup, nil
+	return &Data{query: query.Q, elastic: esClient, rdb: rdb, log: log.NewHelper(logger)}, cleanup, nil
 }
 
 func NewESClient(cfg *conf.ElasticSearch) (*elasticsearch.TypedClient, error) {
@@ -46,6 +48,15 @@ func NewESClient(cfg *conf.ElasticSearch) (*elasticsearch.TypedClient, error) {
 		return nil, err
 	}
 	return es, nil
+}
+
+func NewRedisClient(cfg *conf.Data) (*redis.Client, error) {
+	rdb := redis.NewClient(&redis.Options{
+		Addr:         cfg.Redis.Addr,
+		WriteTimeout: cfg.Redis.WriteTimeout.AsDuration(),
+		ReadTimeout:  cfg.Redis.ReadTimeout.AsDuration(),
+	})
+	return rdb, nil
 }
 
 func NewDB(cfg *conf.Data) (*gorm.DB, error) {
