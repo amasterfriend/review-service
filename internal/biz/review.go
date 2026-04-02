@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	kerrors "github.com/go-kratos/kratos/v2/errors"
 	"github.com/go-kratos/kratos/v2/log"
 )
 
@@ -181,6 +182,10 @@ func (uc ReviewUsecase) AppealReview(ctx context.Context, param *AppealParam) (*
 // AuditReview O端审核评价
 func (uc *ReviewUsecase) AuditReview(ctx context.Context, param *AuditParam) (*model.ReviewInfo, error) {
 	uc.log.WithContext(ctx).Debugf("[biz] AuditReview param:%v", param)
+	if deadline, ok := ctx.Deadline(); ok {
+		uc.log.WithContext(ctx).Debugf("[biz] AuditReview review_id=%d ctx_remaining=%s", param.ReviewID, time.Until(deadline).String())
+	}
+
 	review, err := uc.repo.GetReview(ctx, param.ReviewID)
 	if err != nil {
 		return nil, v1.ErrorDbFailed("查询数据库失败")
@@ -189,9 +194,22 @@ func (uc *ReviewUsecase) AuditReview(ctx context.Context, param *AuditParam) (*m
 	if review.Status != 10 {
 		return nil, errors.New("只有待审核状态的评论才能进行审核")
 	}
+
+	aiStart := time.Now()
 	ret, err := uc.aiAuditor.AuditReview(ctx, review)
+	aiCost := time.Since(aiStart)
 	if err != nil {
+		if isTimeoutErr(err) {
+			uc.log.WithContext(ctx).Errorf("[biz] AuditReview ai timeout review_id=%d stage=ai cost=%s retryable=true err=%v", param.ReviewID, aiCost.String(), err)
+			return nil, timeoutErr("AI审核超时")
+		}
+		uc.log.WithContext(ctx).Errorf("[biz] AuditReview ai failed review_id=%d stage=ai cost=%s retryable=false err=%v", param.ReviewID, aiCost.String(), err)
 		return nil, err
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		uc.log.WithContext(ctx).Debugf("[biz] AuditReview ai done review_id=%d cost=%s ctx_remaining=%s", param.ReviewID, aiCost.String(), time.Until(deadline).String())
+	} else {
+		uc.log.WithContext(ctx).Debugf("[biz] AuditReview ai done review_id=%d cost=%s", param.ReviewID, aiCost.String())
 	}
 
 	param.Status = ret.SuggestedStatus
@@ -205,11 +223,32 @@ func (uc *ReviewUsecase) AuditReview(ctx context.Context, param *AuditParam) (*m
 	if param.OpUser == "" {
 		param.OpUser = "AI"
 	}
-	return uc.repo.AuditReview(ctx, param)
+
+	dbStart := time.Now()
+	res, err := uc.repo.AuditReview(ctx, param)
+	dbCost := time.Since(dbStart)
+	if err != nil {
+		if isTimeoutErr(err) {
+			uc.log.WithContext(ctx).Errorf("[biz] AuditReview db timeout review_id=%d suggested_status=%d stage=db cost=%s retryable=true err=%v", param.ReviewID, param.Status, dbCost.String(), err)
+			return nil, timeoutErr("审核结果写库超时")
+		}
+		uc.log.WithContext(ctx).Errorf("[biz] AuditReview db failed review_id=%d suggested_status=%d stage=db cost=%s retryable=false err=%v", param.ReviewID, param.Status, dbCost.String(), err)
+		return nil, err
+	}
+	uc.log.WithContext(ctx).Debugf("[biz] AuditReview db done review_id=%d suggested_status=%d cost=%s", param.ReviewID, param.Status, dbCost.String())
+	return res, nil
 }
 
 // AuditAppeal O端审核申诉
 func (uc *ReviewUsecase) AuditAppeal(ctx context.Context, param *AuditAppealParam) error {
 	uc.log.WithContext(ctx).Debugf("[biz] AuditAppeal param:%v", param)
 	return uc.repo.AuditAppeal(ctx, param)
+}
+
+func isTimeoutErr(err error) bool {
+	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
+}
+
+func timeoutErr(msg string) error {
+	return kerrors.New(504, "REQUEST_TIMEOUT", msg)
 }

@@ -20,7 +20,8 @@ import (
 
 var ProviderSet = wire.NewSet(NewAIAuditor)
 
-const reviewAuditPrompt = `你是电商平台的评价审核助手。
+const (
+	reviewAuditPrompt = `你是电商平台的评价审核助手。
 你必须判断评价是否合规，并只输出 JSON，不要输出其他文本。
 
 审核标准：
@@ -35,6 +36,8 @@ const reviewAuditPrompt = `你是电商平台的评价审核助手。
 - suggested_status 只能是 20(审核通过) 或 30(审核不通过)
 - reason 是一句话原因
 - risk 只能是 low / high`
+	defaultAILocalTimeout = 3 * time.Second
+)
 
 type client struct {
 	model *openaiModel.ChatModel
@@ -81,7 +84,7 @@ func (c *client) AuditReview(ctx context.Context, review *model.ReviewInfo) (*bi
 		return nil, errors.New("review is nil")
 	}
 
-	llmCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	llmCtx, cancel := deriveTimeoutContext(ctx, defaultAILocalTimeout)
 	defer cancel()
 
 	msg, err := c.model.Generate(llmCtx, []*schema.Message{
@@ -111,4 +114,20 @@ func (c *client) AuditReview(ctx context.Context, review *model.ReviewInfo) (*bi
 		Reason:          strings.TrimSpace(reply.Reason),
 		Risk:            reply.Risk,
 	}, nil
+}
+
+func deriveTimeoutContext(parent context.Context, max time.Duration) (context.Context, context.CancelFunc) {
+	if parent == nil {
+		return context.WithTimeout(context.Background(), max)
+	}
+	if deadline, ok := parent.Deadline(); ok {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return context.WithCancel(parent)
+		}
+		if remaining < max {
+			max = remaining
+		}
+	}
+	return context.WithTimeout(parent, max)
 }
