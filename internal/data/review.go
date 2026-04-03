@@ -6,12 +6,11 @@ import (
 	"errors"
 	"fmt"
 
+	v1 "review-service/api/review/v1"
 	"review-service/internal/biz"
 	"review-service/internal/data/model"
 	"review-service/internal/data/query"
 	"review-service/pkg/snowflake"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
@@ -59,10 +58,18 @@ func (r *reviewRepo) GetReview(ctx context.Context, reviewID int64) (*model.Revi
 }
 
 var g singleflight.Group
+// errCacheMiss 用统一语义表示“缓存未命中”，与“缓存读异常”区分开。
+var errCacheMiss = errors.New("cache miss")
 
-func (r *reviewRepo) getData1(ctx context.Context, storeID int64, offset, limit int) ([]*biz.MyReviewInfo, error) {
+const (
+	reviewHotCachePrefix   = "review:hot"
+	reviewStaleCachePrefix = "review:stale"
+	reviewIndexName        = "review"
+)
+
+func (r *reviewRepo) getData1(ctx context.Context, storeID int64, offset, limit int) (*biz.ListReviewResult, error) {
 	// 去ES里面查询评价
-	resp, err := r.data.elastic.Search().Index("review").
+	resp, err := r.data.elastic.Search().Index(reviewIndexName).
 		From(offset).
 		Size(limit).
 		Query(&types.Query{
@@ -82,7 +89,6 @@ func (r *reviewRepo) getData1(ctx context.Context, storeID int64, offset, limit 
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("ListReviewByStoreID, es resp:%v\n", resp.Hits.Total.Value)
 	// 反序列化数据
 	// resp.Hits.Hits[0].Source_ ---> json.RawMessage ---> model.ReviewInfo
 	list := make([]*biz.MyReviewInfo, 0, resp.Hits.Total.Value)
@@ -94,22 +100,26 @@ func (r *reviewRepo) getData1(ctx context.Context, storeID int64, offset, limit 
 		}
 		list = append(list, &tmp)
 	}
-	return list, nil
+	return &biz.ListReviewResult{List: list, CacheLayer: "es"}, nil
 }
 
-// 升级版带缓存版本的查询函数
-func (r *reviewRepo) getData2(ctx context.Context, storeID int64, offset, limit int) ([]*biz.MyReviewInfo, error) {
-	// 取数据
-	// 1. 先从缓存中查询数据
-	// 2. 如果缓存中没有，再查询ES
-	// 3. 通过singleflight合并短时间内大量并发请求
-	key := fmt.Sprintf("review:%d:%d:%d", storeID, offset, limit)
-	val, err := r.getDataBySingleflight(ctx, key)
+type storeReviewData struct {
+	payload    []byte
+	// cacheLayer 标记本次数据来源：hot_cache / stale_cache / es。
+	cacheLayer string
+	// degraded=true 表示本次命中的是降级路径（通常是 stale_cache）。
+	degraded   bool
+}
+
+// 升级版带缓存版本的查询函数（hot cache + stale cache + singleflight）
+func (r *reviewRepo) getData2(ctx context.Context, storeID int64, offset, limit int) (*biz.ListReviewResult, error) {
+	ret, err := r.getDataBySingleflight(ctx, storeID, offset, limit)
 	if err != nil {
 		return nil, err
 	}
+
 	hm := new(types.HitsMetadata)
-	if err := json.Unmarshal(val, hm); err != nil {
+	if err := json.Unmarshal(ret.payload, hm); err != nil {
 		return nil, err
 	}
 	// 反序列化数据
@@ -122,61 +132,93 @@ func (r *reviewRepo) getData2(ctx context.Context, storeID int64, offset, limit 
 		}
 		list = append(list, tmp)
 	}
-	return list, nil
+	return &biz.ListReviewResult{
+		List:       list,
+		Degraded:   ret.degraded,
+		CacheLayer: ret.cacheLayer,
+	}, nil
 }
 
-func (r *reviewRepo) getDataBySingleflight(ctx context.Context, key string) ([]byte, error) {
+func (r *reviewRepo) getDataBySingleflight(ctx context.Context, storeID int64, offset, limit int) (*storeReviewData, error) {
+	hotKey := buildCacheKey(reviewHotCachePrefix, storeID, offset, limit)
+	staleKey := buildCacheKey(reviewStaleCachePrefix, storeID, offset, limit)
+	// singleflight key 使用热缓存 key，合并同一分页参数的并发请求。
+	key := hotKey
+
 	v, err, shared := g.Do(key, func() (interface{}, error) {
-		// 先从缓存中查询数据
-		val, err := r.getDataFromCache(ctx, key)
-		if err == nil {
-			return val, nil
+		// 1) 优先读热缓存，命中则直接返回，延迟最低。
+		val, cacheErr := r.getDataFromCache(ctx, hotKey)
+		if cacheErr == nil {
+			return &storeReviewData{payload: val, cacheLayer: "hot_cache"}, nil
 		}
-		// 如果缓存中没有这个key，再查询ES
-		if errors.Is(err, redis.Nil) {
-			r.log.Debugf("cache miss for key:%s", key)
-			data, err := r.getDataFromES(ctx, key)
-			if err == nil {
-				// 返回结果，设置缓存
-				return data, r.setCache(ctx, key, data)
+		if !errors.Is(cacheErr, errCacheMiss) {
+			r.log.WithContext(ctx).Errorf("ListReviewByStoreID read hot cache fail store_id=%d offset=%d limit=%d err=%v", storeID, offset, limit, cacheErr)
+		}
+
+		// 2) 热缓存 miss，回源 ES。成功后同时刷新 hot/stale 两层缓存。
+		data, esErr := r.getDataFromES(ctx, storeID, offset, limit)
+		if esErr == nil {
+			if setErr := r.setCache(ctx, hotKey, data, r.data.hotTTL); setErr != nil {
+				r.log.WithContext(ctx).Errorf("ListReviewByStoreID write hot cache fail key=%s err=%v", hotKey, setErr)
 			}
-			return nil, err
+			if setErr := r.setCache(ctx, staleKey, data, r.data.staleTTL); setErr != nil {
+				r.log.WithContext(ctx).Errorf("ListReviewByStoreID write stale cache fail key=%s err=%v", staleKey, setErr)
+			}
+			return &storeReviewData{payload: data, cacheLayer: "es"}, nil
 		}
-		// 其他错误，直接返回错误，不继续向下传导压力
-		return nil, err
+
+		r.log.WithContext(ctx).Errorf("ListReviewByStoreID es failed store_id=%d offset=%d limit=%d err=%v", storeID, offset, limit, esErr)
+		if !r.data.enableStaleFallback {
+			return nil, v1.ErrorDependencyDegraded("评论列表依赖异常")
+		}
+
+		// 3) ES 失败时尝试 stale cache 降级，保障可用性。
+		staleVal, staleErr := r.getDataFromCache(ctx, staleKey)
+		if staleErr == nil {
+			r.log.WithContext(ctx).Warnf("ListReviewByStoreID degraded by stale cache store_id=%d offset=%d limit=%d", storeID, offset, limit)
+			return &storeReviewData{payload: staleVal, cacheLayer: "stale_cache", degraded: true}, nil
+		}
+		if !errors.Is(staleErr, errCacheMiss) {
+			r.log.WithContext(ctx).Errorf("ListReviewByStoreID read stale cache fail store_id=%d offset=%d limit=%d err=%v", storeID, offset, limit, staleErr)
+		}
+		return nil, v1.ErrorDependencyDegraded("评论列表依赖异常")
 	})
-	r.log.Debugf("getDataBySingleflight, key:%s, val:%s, err:%v, shared:%v", key, string(v.([]byte)), err, shared)
-	return v.([]byte), err
+	if err != nil {
+		return nil, err
+	}
+	// 使用类型断言前做安全检查，避免 v.([]byte) 这类 panic 风险。
+	ret, ok := v.(*storeReviewData)
+	if !ok || ret == nil {
+		return nil, errors.New("unexpected singleflight result")
+	}
+	r.log.WithContext(ctx).Debugf("ListReviewByStoreID singleflight store_id=%d offset=%d limit=%d shared=%t cache_layer=%s degraded=%t", storeID, offset, limit, shared, ret.cacheLayer, ret.degraded)
+	return ret, nil
 }
 
 // getDataFromCache 读缓存
 func (r *reviewRepo) getDataFromCache(ctx context.Context, key string) ([]byte, error) {
 	val, err := r.data.rdb.Get(ctx, key).Bytes()
-	r.log.Debugf("getDataFromCache, key:%s, val:%s, err:%v", key, string(val), err)
+	// redis.Nil 只表示 key 不存在，不算系统错误。
+	if errors.Is(err, redis.Nil) {
+		return nil, errCacheMiss
+	}
 	if err != nil {
 		return nil, err
 	}
+	r.log.WithContext(ctx).Debugf("ListReviewByStoreID cache hit key=%s", key)
 	return val, nil
 }
 
 // setCache 写缓存
-func (r *reviewRepo) setCache(ctx context.Context, key string, val []byte) error {
-	err := r.data.rdb.Set(ctx, key, val, time.Second*10).Err()
-	r.log.Debugf("setCache, key:%s, val:%s, err:%v", key, string(val), err)
+func (r *reviewRepo) setCache(ctx context.Context, key string, val []byte, ttl time.Duration) error {
+	err := r.data.rdb.Set(ctx, key, val, ttl).Err()
 	return err
 }
 
 // getDataFromES 读ES
-func (r *reviewRepo) getDataFromES(ctx context.Context, key string) ([]byte, error) {
-	values := strings.Split(key, ":")
-	if len(values) < 4 {
-		return nil, errors.New("invalid key")
-	}
-	index, storeID, offsetStr, limitStr := values[0], values[1], values[2], values[3]
-	offset, _ := strconv.Atoi(offsetStr)
-	limit, _ := strconv.Atoi(limitStr)
+func (r *reviewRepo) getDataFromES(ctx context.Context, storeID int64, offset, limit int) ([]byte, error) {
 	resp, err := r.data.elastic.Search().
-		Index(index).
+		Index(reviewIndexName).
 		From(offset).
 		Size(limit).
 		Query(&types.Query{
@@ -200,9 +242,13 @@ func (r *reviewRepo) getDataFromES(ctx context.Context, key string) ([]byte, err
 }
 
 // ListReviewByStoreID 根据商家ID查询评价列表
-func (r *reviewRepo) ListReviewByStoreID(ctx context.Context, storeID int64, offset, limit int) ([]*biz.MyReviewInfo, error) {
+func (r *reviewRepo) ListReviewByStoreID(ctx context.Context, storeID int64, offset, limit int) (*biz.ListReviewResult, error) {
 	// return r.getData1(ctx, storeID, offset, limit) // 直接查ES
 	return r.getData2(ctx, storeID, offset, limit) // 增加缓存和singleflight的版本
+}
+
+func buildCacheKey(prefix string, storeID int64, offset, limit int) string {
+	return fmt.Sprintf("%s:%d:%d:%d", prefix, storeID, offset, limit)
 }
 
 // SaveReply 保存商家回复

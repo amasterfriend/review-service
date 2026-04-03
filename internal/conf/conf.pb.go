@@ -94,6 +94,7 @@ type Server struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Http          *Server_HTTP           `protobuf:"bytes,1,opt,name=http,proto3" json:"http,omitempty"`
 	Grpc          *Server_GRPC           `protobuf:"bytes,2,opt,name=grpc,proto3" json:"grpc,omitempty"`
+	RateLimit     *Server_RateLimit      `protobuf:"bytes,3,opt,name=rate_limit,json=rateLimit,proto3" json:"rate_limit,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -142,10 +143,19 @@ func (x *Server) GetGrpc() *Server_GRPC {
 	return nil
 }
 
+func (x *Server) GetRateLimit() *Server_RateLimit {
+	if x != nil {
+		return x.RateLimit
+	}
+	return nil
+}
+
 type Data struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Database      *Data_Database         `protobuf:"bytes,1,opt,name=database,proto3" json:"database,omitempty"`
 	Redis         *Data_Redis            `protobuf:"bytes,2,opt,name=redis,proto3" json:"redis,omitempty"`
+	Cache         *Data_Cache            `protobuf:"bytes,3,opt,name=cache,proto3" json:"cache,omitempty"`
+	Degrade       *Data_Degrade          `protobuf:"bytes,4,opt,name=degrade,proto3" json:"degrade,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -190,6 +200,20 @@ func (x *Data) GetDatabase() *Data_Database {
 func (x *Data) GetRedis() *Data_Redis {
 	if x != nil {
 		return x.Redis
+	}
+	return nil
+}
+
+func (x *Data) GetCache() *Data_Cache {
+	if x != nil {
+		return x.Cache
+	}
+	return nil
+}
+
+func (x *Data) GetDegrade() *Data_Degrade {
+	if x != nil {
+		return x.Degrade
 	}
 	return nil
 }
@@ -454,6 +478,102 @@ func (x *Server_GRPC) GetTimeout() *durationpb.Duration {
 	return nil
 }
 
+type Server_RateLimit struct {
+	state             protoimpl.MessageState              `protogen:"open.v1"`
+	ListReviewByStore *Server_RateLimit_ListReviewByStore `protobuf:"bytes,1,opt,name=list_review_by_store,json=listReviewByStore,proto3" json:"list_review_by_store,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *Server_RateLimit) Reset() {
+	*x = Server_RateLimit{}
+	mi := &file_conf_conf_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Server_RateLimit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Server_RateLimit) ProtoMessage() {}
+
+func (x *Server_RateLimit) ProtoReflect() protoreflect.Message {
+	mi := &file_conf_conf_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Server_RateLimit.ProtoReflect.Descriptor instead.
+func (*Server_RateLimit) Descriptor() ([]byte, []int) {
+	return file_conf_conf_proto_rawDescGZIP(), []int{1, 2}
+}
+
+func (x *Server_RateLimit) GetListReviewByStore() *Server_RateLimit_ListReviewByStore {
+	if x != nil {
+		return x.ListReviewByStore
+	}
+	return nil
+}
+
+type Server_RateLimit_ListReviewByStore struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Qps           int32                  `protobuf:"varint,1,opt,name=qps,proto3" json:"qps,omitempty"`
+	Burst         int32                  `protobuf:"varint,2,opt,name=burst,proto3" json:"burst,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Server_RateLimit_ListReviewByStore) Reset() {
+	*x = Server_RateLimit_ListReviewByStore{}
+	mi := &file_conf_conf_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Server_RateLimit_ListReviewByStore) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Server_RateLimit_ListReviewByStore) ProtoMessage() {}
+
+func (x *Server_RateLimit_ListReviewByStore) ProtoReflect() protoreflect.Message {
+	mi := &file_conf_conf_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Server_RateLimit_ListReviewByStore.ProtoReflect.Descriptor instead.
+func (*Server_RateLimit_ListReviewByStore) Descriptor() ([]byte, []int) {
+	return file_conf_conf_proto_rawDescGZIP(), []int{1, 2, 0}
+}
+
+func (x *Server_RateLimit_ListReviewByStore) GetQps() int32 {
+	if x != nil {
+		return x.Qps
+	}
+	return 0
+}
+
+func (x *Server_RateLimit_ListReviewByStore) GetBurst() int32 {
+	if x != nil {
+		return x.Burst
+	}
+	return 0
+}
+
 type Data_Database struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Driver        string                 `protobuf:"bytes,1,opt,name=driver,proto3" json:"driver,omitempty"`
@@ -464,7 +584,7 @@ type Data_Database struct {
 
 func (x *Data_Database) Reset() {
 	*x = Data_Database{}
-	mi := &file_conf_conf_proto_msgTypes[8]
+	mi := &file_conf_conf_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -476,7 +596,7 @@ func (x *Data_Database) String() string {
 func (*Data_Database) ProtoMessage() {}
 
 func (x *Data_Database) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[8]
+	mi := &file_conf_conf_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -518,7 +638,7 @@ type Data_Redis struct {
 
 func (x *Data_Redis) Reset() {
 	*x = Data_Redis{}
-	mi := &file_conf_conf_proto_msgTypes[9]
+	mi := &file_conf_conf_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -530,7 +650,7 @@ func (x *Data_Redis) String() string {
 func (*Data_Redis) ProtoMessage() {}
 
 func (x *Data_Redis) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[9]
+	mi := &file_conf_conf_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -574,6 +694,102 @@ func (x *Data_Redis) GetWriteTimeout() *durationpb.Duration {
 	return nil
 }
 
+type Data_Cache struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	HotTtl        *durationpb.Duration   `protobuf:"bytes,1,opt,name=hot_ttl,json=hotTtl,proto3" json:"hot_ttl,omitempty"`
+	StaleTtl      *durationpb.Duration   `protobuf:"bytes,2,opt,name=stale_ttl,json=staleTtl,proto3" json:"stale_ttl,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Data_Cache) Reset() {
+	*x = Data_Cache{}
+	mi := &file_conf_conf_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Data_Cache) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Data_Cache) ProtoMessage() {}
+
+func (x *Data_Cache) ProtoReflect() protoreflect.Message {
+	mi := &file_conf_conf_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Data_Cache.ProtoReflect.Descriptor instead.
+func (*Data_Cache) Descriptor() ([]byte, []int) {
+	return file_conf_conf_proto_rawDescGZIP(), []int{2, 2}
+}
+
+func (x *Data_Cache) GetHotTtl() *durationpb.Duration {
+	if x != nil {
+		return x.HotTtl
+	}
+	return nil
+}
+
+func (x *Data_Cache) GetStaleTtl() *durationpb.Duration {
+	if x != nil {
+		return x.StaleTtl
+	}
+	return nil
+}
+
+type Data_Degrade struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	EnableStaleFallback bool                   `protobuf:"varint,1,opt,name=enable_stale_fallback,json=enableStaleFallback,proto3" json:"enable_stale_fallback,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *Data_Degrade) Reset() {
+	*x = Data_Degrade{}
+	mi := &file_conf_conf_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Data_Degrade) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Data_Degrade) ProtoMessage() {}
+
+func (x *Data_Degrade) ProtoReflect() protoreflect.Message {
+	mi := &file_conf_conf_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Data_Degrade.ProtoReflect.Descriptor instead.
+func (*Data_Degrade) Descriptor() ([]byte, []int) {
+	return file_conf_conf_proto_rawDescGZIP(), []int{2, 3}
+}
+
+func (x *Data_Degrade) GetEnableStaleFallback() bool {
+	if x != nil {
+		return x.EnableStaleFallback
+	}
+	return false
+}
+
 type Registry_Consul struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Address       string                 `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
@@ -584,7 +800,7 @@ type Registry_Consul struct {
 
 func (x *Registry_Consul) Reset() {
 	*x = Registry_Consul{}
-	mi := &file_conf_conf_proto_msgTypes[10]
+	mi := &file_conf_conf_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -596,7 +812,7 @@ func (x *Registry_Consul) String() string {
 func (*Registry_Consul) ProtoMessage() {}
 
 func (x *Registry_Consul) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[10]
+	mi := &file_conf_conf_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -636,10 +852,12 @@ const file_conf_conf_proto_rawDesc = "" +
 	"\x06server\x18\x01 \x01(\v2\x12.kratos.api.ServerR\x06server\x12$\n" +
 	"\x04data\x18\x02 \x01(\v2\x10.kratos.api.DataR\x04data\x123\n" +
 	"\tsnowflake\x18\x03 \x01(\v2\x15.kratos.api.SnowflakeR\tsnowflake\x12?\n" +
-	"\relasticsearch\x18\x04 \x01(\v2\x19.kratos.api.ElasticSearchR\relasticsearch\"\xb8\x02\n" +
+	"\relasticsearch\x18\x04 \x01(\v2\x19.kratos.api.ElasticSearchR\relasticsearch\"\xa1\x04\n" +
 	"\x06Server\x12+\n" +
 	"\x04http\x18\x01 \x01(\v2\x17.kratos.api.Server.HTTPR\x04http\x12+\n" +
-	"\x04grpc\x18\x02 \x01(\v2\x17.kratos.api.Server.GRPCR\x04grpc\x1ai\n" +
+	"\x04grpc\x18\x02 \x01(\v2\x17.kratos.api.Server.GRPCR\x04grpc\x12;\n" +
+	"\n" +
+	"rate_limit\x18\x03 \x01(\v2\x1c.kratos.api.Server.RateLimitR\trateLimit\x1ai\n" +
 	"\x04HTTP\x12\x18\n" +
 	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x123\n" +
@@ -647,10 +865,17 @@ const file_conf_conf_proto_rawDesc = "" +
 	"\x04GRPC\x12\x18\n" +
 	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x123\n" +
-	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeout\"\xdd\x02\n" +
+	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeout\x1a\xa9\x01\n" +
+	"\tRateLimit\x12_\n" +
+	"\x14list_review_by_store\x18\x01 \x01(\v2..kratos.api.Server.RateLimit.ListReviewByStoreR\x11listReviewByStore\x1a;\n" +
+	"\x11ListReviewByStore\x12\x10\n" +
+	"\x03qps\x18\x01 \x01(\x05R\x03qps\x12\x14\n" +
+	"\x05burst\x18\x02 \x01(\x05R\x05burst\"\xf3\x04\n" +
 	"\x04Data\x125\n" +
 	"\bdatabase\x18\x01 \x01(\v2\x19.kratos.api.Data.DatabaseR\bdatabase\x12,\n" +
-	"\x05redis\x18\x02 \x01(\v2\x16.kratos.api.Data.RedisR\x05redis\x1a:\n" +
+	"\x05redis\x18\x02 \x01(\v2\x16.kratos.api.Data.RedisR\x05redis\x12,\n" +
+	"\x05cache\x18\x03 \x01(\v2\x16.kratos.api.Data.CacheR\x05cache\x122\n" +
+	"\adegrade\x18\x04 \x01(\v2\x18.kratos.api.Data.DegradeR\adegrade\x1a:\n" +
 	"\bDatabase\x12\x16\n" +
 	"\x06driver\x18\x01 \x01(\tR\x06driver\x12\x16\n" +
 	"\x06source\x18\x02 \x01(\tR\x06source\x1a\xb3\x01\n" +
@@ -658,7 +883,12 @@ const file_conf_conf_proto_rawDesc = "" +
 	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x12<\n" +
 	"\fread_timeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\vreadTimeout\x12>\n" +
-	"\rwrite_timeout\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\fwriteTimeout\"I\n" +
+	"\rwrite_timeout\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\fwriteTimeout\x1as\n" +
+	"\x05Cache\x122\n" +
+	"\ahot_ttl\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\x06hotTtl\x126\n" +
+	"\tstale_ttl\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\bstaleTtl\x1a=\n" +
+	"\aDegrade\x122\n" +
+	"\x15enable_stale_fallback\x18\x01 \x01(\bR\x13enableStaleFallback\"I\n" +
 	"\tSnowflake\x12\x1d\n" +
 	"\n" +
 	"start_time\x18\x01 \x01(\tR\tstartTime\x12\x1d\n" +
@@ -684,20 +914,24 @@ func file_conf_conf_proto_rawDescGZIP() []byte {
 	return file_conf_conf_proto_rawDescData
 }
 
-var file_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_conf_conf_proto_goTypes = []any{
-	(*Bootstrap)(nil),           // 0: kratos.api.Bootstrap
-	(*Server)(nil),              // 1: kratos.api.Server
-	(*Data)(nil),                // 2: kratos.api.Data
-	(*Snowflake)(nil),           // 3: kratos.api.Snowflake
-	(*Registry)(nil),            // 4: kratos.api.Registry
-	(*ElasticSearch)(nil),       // 5: kratos.api.ElasticSearch
-	(*Server_HTTP)(nil),         // 6: kratos.api.Server.HTTP
-	(*Server_GRPC)(nil),         // 7: kratos.api.Server.GRPC
-	(*Data_Database)(nil),       // 8: kratos.api.Data.Database
-	(*Data_Redis)(nil),          // 9: kratos.api.Data.Redis
-	(*Registry_Consul)(nil),     // 10: kratos.api.Registry.Consul
-	(*durationpb.Duration)(nil), // 11: google.protobuf.Duration
+	(*Bootstrap)(nil),                          // 0: kratos.api.Bootstrap
+	(*Server)(nil),                             // 1: kratos.api.Server
+	(*Data)(nil),                               // 2: kratos.api.Data
+	(*Snowflake)(nil),                          // 3: kratos.api.Snowflake
+	(*Registry)(nil),                           // 4: kratos.api.Registry
+	(*ElasticSearch)(nil),                      // 5: kratos.api.ElasticSearch
+	(*Server_HTTP)(nil),                        // 6: kratos.api.Server.HTTP
+	(*Server_GRPC)(nil),                        // 7: kratos.api.Server.GRPC
+	(*Server_RateLimit)(nil),                   // 8: kratos.api.Server.RateLimit
+	(*Server_RateLimit_ListReviewByStore)(nil), // 9: kratos.api.Server.RateLimit.ListReviewByStore
+	(*Data_Database)(nil),                      // 10: kratos.api.Data.Database
+	(*Data_Redis)(nil),                         // 11: kratos.api.Data.Redis
+	(*Data_Cache)(nil),                         // 12: kratos.api.Data.Cache
+	(*Data_Degrade)(nil),                       // 13: kratos.api.Data.Degrade
+	(*Registry_Consul)(nil),                    // 14: kratos.api.Registry.Consul
+	(*durationpb.Duration)(nil),                // 15: google.protobuf.Duration
 }
 var file_conf_conf_proto_depIdxs = []int32{
 	1,  // 0: kratos.api.Bootstrap.server:type_name -> kratos.api.Server
@@ -706,18 +940,24 @@ var file_conf_conf_proto_depIdxs = []int32{
 	5,  // 3: kratos.api.Bootstrap.elasticsearch:type_name -> kratos.api.ElasticSearch
 	6,  // 4: kratos.api.Server.http:type_name -> kratos.api.Server.HTTP
 	7,  // 5: kratos.api.Server.grpc:type_name -> kratos.api.Server.GRPC
-	8,  // 6: kratos.api.Data.database:type_name -> kratos.api.Data.Database
-	9,  // 7: kratos.api.Data.redis:type_name -> kratos.api.Data.Redis
-	10, // 8: kratos.api.Registry.consul:type_name -> kratos.api.Registry.Consul
-	11, // 9: kratos.api.Server.HTTP.timeout:type_name -> google.protobuf.Duration
-	11, // 10: kratos.api.Server.GRPC.timeout:type_name -> google.protobuf.Duration
-	11, // 11: kratos.api.Data.Redis.read_timeout:type_name -> google.protobuf.Duration
-	11, // 12: kratos.api.Data.Redis.write_timeout:type_name -> google.protobuf.Duration
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	8,  // 6: kratos.api.Server.rate_limit:type_name -> kratos.api.Server.RateLimit
+	10, // 7: kratos.api.Data.database:type_name -> kratos.api.Data.Database
+	11, // 8: kratos.api.Data.redis:type_name -> kratos.api.Data.Redis
+	12, // 9: kratos.api.Data.cache:type_name -> kratos.api.Data.Cache
+	13, // 10: kratos.api.Data.degrade:type_name -> kratos.api.Data.Degrade
+	14, // 11: kratos.api.Registry.consul:type_name -> kratos.api.Registry.Consul
+	15, // 12: kratos.api.Server.HTTP.timeout:type_name -> google.protobuf.Duration
+	15, // 13: kratos.api.Server.GRPC.timeout:type_name -> google.protobuf.Duration
+	9,  // 14: kratos.api.Server.RateLimit.list_review_by_store:type_name -> kratos.api.Server.RateLimit.ListReviewByStore
+	15, // 15: kratos.api.Data.Redis.read_timeout:type_name -> google.protobuf.Duration
+	15, // 16: kratos.api.Data.Redis.write_timeout:type_name -> google.protobuf.Duration
+	15, // 17: kratos.api.Data.Cache.hot_ttl:type_name -> google.protobuf.Duration
+	15, // 18: kratos.api.Data.Cache.stale_ttl:type_name -> google.protobuf.Duration
+	19, // [19:19] is the sub-list for method output_type
+	19, // [19:19] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_conf_conf_proto_init() }
@@ -731,7 +971,7 @@ func file_conf_conf_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_conf_conf_proto_rawDesc), len(file_conf_conf_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

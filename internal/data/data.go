@@ -5,6 +5,7 @@ import (
 	"review-service/internal/conf"
 	"review-service/internal/data/query"
 	"strings"
+	"time"
 
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/go-kratos/kratos/v2/log"
@@ -26,10 +27,16 @@ type Data struct {
 	log     *log.Helper
 	elastic *elasticsearch.TypedClient
 	rdb     *redis.Client
+	// hotTTL: 热缓存 TTL，优先命中，保证低延迟。
+	hotTTL time.Duration
+	// staleTTL: 兜底缓存 TTL，依赖异常时用于降级返回旧数据。
+	staleTTL time.Duration
+	// enableStaleFallback: 是否允许 ES 失败时回退到 stale cache。
+	enableStaleFallback bool
 }
 
 // NewData .
-func NewData(db *gorm.DB, esClient *elasticsearch.TypedClient, rdb *redis.Client, logger log.Logger) (*Data, func(), error) {
+func NewData(cfg *conf.Data, db *gorm.DB, esClient *elasticsearch.TypedClient, rdb *redis.Client, logger log.Logger) (*Data, func(), error) {
 	cleanup := func() {
 		log.Info("closing the data resources")
 	}
@@ -37,7 +44,28 @@ func NewData(db *gorm.DB, esClient *elasticsearch.TypedClient, rdb *redis.Client
 	// 非常重要!为GEN生成的query代码设置数据库连接对象
 	query.SetDefault(db)
 
-	return &Data{query: query.Q, elastic: esClient, rdb: rdb, log: log.NewHelper(logger)}, cleanup, nil
+	hotTTL := 10 * time.Second
+	if cfg.GetCache() != nil && cfg.GetCache().GetHotTtl() != nil {
+		hotTTL = cfg.GetCache().GetHotTtl().AsDuration()
+	}
+	staleTTL := 10 * time.Minute
+	if cfg.GetCache() != nil && cfg.GetCache().GetStaleTtl() != nil {
+		staleTTL = cfg.GetCache().GetStaleTtl().AsDuration()
+	}
+	enableStaleFallback := true
+	if cfg.GetDegrade() != nil {
+		enableStaleFallback = cfg.GetDegrade().GetEnableStaleFallback()
+	}
+
+	return &Data{
+		query:               query.Q,
+		elastic:             esClient,
+		rdb:                 rdb,
+		log:                 log.NewHelper(logger),
+		hotTTL:              hotTTL,
+		staleTTL:            staleTTL,
+		enableStaleFallback: enableStaleFallback,
+	}, cleanup, nil
 }
 
 func NewESClient(cfg *conf.ElasticSearch) (*elasticsearch.TypedClient, error) {

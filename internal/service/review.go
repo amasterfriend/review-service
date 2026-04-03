@@ -2,25 +2,17 @@ package service
 
 import (
 	"context"
-	"fmt"
 
 	pb "review-service/api/review/v1"
 	"review-service/internal/biz"
 	"review-service/internal/data/model"
+
+	"github.com/go-kratos/kratos/v2/transport"
 )
-
-type ReviewService struct {
-	pb.UnimplementedReviewServer
-	uc *biz.ReviewUsecase
-}
-
-func NewReviewService(uc *biz.ReviewUsecase) *ReviewService {
-	return &ReviewService{uc: uc}
-}
 
 // CreateReview C端创建评价
 func (s *ReviewService) CreateReview(ctx context.Context, req *pb.CreateReviewRequest) (*pb.CreateReviewReply, error) {
-	fmt.Printf("[service] CreateReview: %v\n", req)
+	s.log.WithContext(ctx).Debugf("[service] CreateReview req=%v", req)
 	// 参数转换
 	// 调用biz层
 	var anonymous int32
@@ -38,7 +30,7 @@ func (s *ReviewService) CreateReview(ctx context.Context, req *pb.CreateReviewRe
 		PicInfo:      req.PicInfo,
 		VideoInfo:    req.VideoInfo,
 		Anonymous:    anonymous,
-		Status:       0,
+		Status:       10,
 	})
 	// 拼装返回结果
 	if err != nil {
@@ -49,7 +41,7 @@ func (s *ReviewService) CreateReview(ctx context.Context, req *pb.CreateReviewRe
 
 // GetReview C端获取评价详情
 func (s *ReviewService) GetReview(ctx context.Context, req *pb.GetReviewRequest) (*pb.GetReviewReply, error) {
-	fmt.Printf("GetReview req:%#v\n", req)
+	s.log.WithContext(ctx).Debugf("[service] GetReview req=%v", req)
 	review, err := s.uc.GetReview(ctx, req.ReviewID)
 	if err != nil {
 		return nil, err
@@ -95,14 +87,15 @@ func (s *ReviewService) GetReview(ctx context.Context, req *pb.GetReviewRequest)
 
 // ListReviewByStoreID C端根据商户ID分页查询评价列表
 func (s *ReviewService) ListReviewByStoreID(ctx context.Context, req *pb.ListReviewByStoreIDRequest) (*pb.ListReviewByStoreIDReply, error) {
-	fmt.Printf("[service] ListReviewByStoreID req:%#v\n", req)
-	dataList, err := s.uc.ListReviewByStoreID(ctx, req.GetStoreID(), req.GetPage(), req.GetSize())
+	s.log.WithContext(ctx).Debugf("[service] ListReviewByStoreID req=%v", req)
+	result, err := s.uc.ListReviewByStoreID(ctx, req.GetStoreID(), req.GetPage(), req.GetSize())
 	if err != nil {
 		return nil, err
 	}
+	setDegradeHeader(ctx, result.Degraded, result.CacheLayer)
 	// format
-	list := make([]*pb.ReviewInfo, 0, len(dataList))
-	for _, review := range dataList {
+	list := make([]*pb.ReviewInfo, 0, len(result.List))
+	for _, review := range result.List {
 		list = append(list, &pb.ReviewInfo{
 			ReviewID:     review.ReviewID,
 			UserID:       review.UserID,
@@ -116,12 +109,13 @@ func (s *ReviewService) ListReviewByStoreID(ctx context.Context, req *pb.ListRev
 			Status:       review.Status,
 		})
 	}
+	s.log.WithContext(ctx).Debugf("[service] ListReviewByStoreID done store_id=%d degraded=%t cache_layer=%s size=%d", req.GetStoreID(), result.Degraded, result.CacheLayer, len(list))
 	return &pb.ListReviewByStoreIDReply{List: list}, nil
 }
 
 // ReplyReview B端回复评价
 func (s *ReviewService) ReplyReview(ctx context.Context, req *pb.ReplyReviewRequest) (*pb.ReplyReviewReply, error) {
-	fmt.Printf("[service] ReplyReview req:%#v\n", req)
+	s.log.WithContext(ctx).Debugf("[service] ReplyReview req=%v", req)
 	// 调用biz层
 	reply, err := s.uc.CreateReply(ctx, &biz.ReplyParam{
 		ReviewID:  req.GetReviewID(),
@@ -138,7 +132,7 @@ func (s *ReviewService) ReplyReview(ctx context.Context, req *pb.ReplyReviewRequ
 
 // AppealReview B端申诉评价
 func (s *ReviewService) AppealReview(ctx context.Context, req *pb.AppealReviewRequest) (*pb.AppealReviewReply, error) {
-	fmt.Printf("[service] AppealReview req:%#v\n", req)
+	s.log.WithContext(ctx).Debugf("[service] AppealReview req=%v", req)
 	ret, err := s.uc.AppealReview(ctx, &biz.AppealParam{
 		ReviewID:  req.GetReviewID(),
 		StoreID:   req.GetStoreID(),
@@ -150,13 +144,13 @@ func (s *ReviewService) AppealReview(ctx context.Context, req *pb.AppealReviewRe
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("[service] AppealReview ret:%v err:%v\n", ret, err)
+	s.log.WithContext(ctx).Debugf("[service] AppealReview ret=%v", ret)
 	return &pb.AppealReviewReply{AppealID: ret.AppealID}, nil
 }
 
 // AuditReview O端审核评价
 func (s *ReviewService) AuditReview(ctx context.Context, req *pb.AuditReviewRequest) (*pb.AuditReviewReply, error) {
-	fmt.Printf("AuditReview req:%#v\n", req)
+	s.log.WithContext(ctx).Debugf("[service] AuditReview req=%v", req)
 	res, err := s.uc.AuditReview(ctx, &biz.AuditParam{
 		ReviewID:  req.GetReviewID(),
 		OpUser:    req.GetOpUser(),
@@ -175,7 +169,7 @@ func (s *ReviewService) AuditReview(ctx context.Context, req *pb.AuditReviewRequ
 
 // AuditAppeal O端审核商家申诉
 func (s *ReviewService) AuditAppeal(ctx context.Context, req *pb.AuditAppealRequest) (*pb.AuditAppealReply, error) {
-	fmt.Printf("[service] AuditAppeal req:%#v\n", req)
+	s.log.WithContext(ctx).Debugf("[service] AuditAppeal req=%v", req)
 	err := s.uc.AuditAppeal(ctx, &biz.AuditAppealParam{
 		ReviewID: req.GetReviewID(),
 		AppealID: req.GetAppealID(),
@@ -186,4 +180,24 @@ func (s *ReviewService) AuditAppeal(ctx context.Context, req *pb.AuditAppealRequ
 		return nil, err
 	}
 	return &pb.AuditAppealReply{}, nil
+}
+
+func setDegradeHeader(ctx context.Context, degraded bool, cacheLayer string) {
+	tr, ok := transport.FromServerContext(ctx)
+	if !ok {
+		return
+	}
+	header := tr.ReplyHeader()
+	if header == nil {
+		return
+	}
+	if degraded {
+		header.Set("X-Review-Degraded", "true")
+	} else {
+		header.Set("X-Review-Degraded", "false")
+	}
+	// 输出缓存层来源，便于客户端或网关快速识别是否命中降级/缓存层。
+	if cacheLayer != "" {
+		header.Set("X-Review-Cache-Layer", cacheLayer)
+	}
 }

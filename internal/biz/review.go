@@ -22,7 +22,7 @@ type ReviewRepo interface {
 	AppealReview(context.Context, *AppealParam) (*model.ReviewAppealInfo, error)
 	AuditReview(context.Context, *AuditParam) (*model.ReviewInfo, error)
 	AuditAppeal(context.Context, *AuditAppealParam) error
-	ListReviewByStoreID(context.Context, int64, int, int) ([]*MyReviewInfo, error)
+	ListReviewByStoreID(context.Context, int64, int, int) (*ListReviewResult, error)
 	// ListReviewByUserID(context.Context, int64, int32, int32) ([]*model.ReviewInfo, error)
 }
 
@@ -34,6 +34,14 @@ type ReviewUsecase struct {
 	repo      ReviewRepo
 	aiAuditor ReviewAIAuditor
 	log       *log.Helper
+}
+
+type ListReviewResult struct {
+	List       []*MyReviewInfo
+	// Degraded=true 表示本次结果来自降级路径（例如 stale cache）。
+	Degraded   bool
+	// CacheLayer 表示数据来源，便于观测和问题定位。
+	CacheLayer string
 }
 
 func NewReviewUsecase(repo ReviewRepo, aiAuditor ReviewAIAuditor, logger log.Logger) *ReviewUsecase {
@@ -65,6 +73,11 @@ func (uc *ReviewUsecase) CreateReview(ctx context.Context, review *model.ReviewI
 	// 这里可以使用雪花算法自己生成
 	// 也可以直接接入公司内部的分布式ID生成服务（前提是公司内部有这种服务）
 	review.ReviewID = snowflake.GenID()
+	// 统一状态机入口：创建默认进入“待审核(10)”。
+	// 避免 status=0 导致后续审核链路状态不匹配。
+	if review.Status == 0 {
+		review.Status = 10
+	}
 	// 3、查询订单和商品快照信息
 	// 实际业务场景下就需要查询订单服务和商家服务（比如说通过RPC调用订单服务和商家服务）
 	// 4、拼装数据入库
@@ -93,7 +106,7 @@ func (uc *ReviewUsecase) GetReview(ctx context.Context, reviewID int64) (*model.
 // }
 
 // ListReviewByStoreID 根据商家ID获取评论列表（分页）
-func (uc *ReviewUsecase) ListReviewByStoreID(ctx context.Context, storeID int64, page int32, size int32) ([]*MyReviewInfo, error) {
+func (uc *ReviewUsecase) ListReviewByStoreID(ctx context.Context, storeID int64, page int32, size int32) (*ListReviewResult, error) {
 	if page <= 0 {
 		page = 1
 	}
@@ -103,8 +116,12 @@ func (uc *ReviewUsecase) ListReviewByStoreID(ctx context.Context, storeID int64,
 	offset := (page - 1) * size
 	limit := size
 
-	uc.log.WithContext(ctx).Debugf("[biz] ListReviewByStoreID, storeID: %d, offset: %d, limit: %d", storeID, offset, limit)
-	return uc.repo.ListReviewByStoreID(ctx, storeID, int(offset), int(limit))
+	ret, err := uc.repo.ListReviewByStoreID(ctx, storeID, int(offset), int(limit))
+	if err != nil {
+		return nil, err
+	}
+	uc.log.WithContext(ctx).Debugf("[biz] ListReviewByStoreID store_id=%d offset=%d limit=%d cache_layer=%s degraded=%t", storeID, offset, limit, ret.CacheLayer, ret.Degraded)
+	return ret, nil
 }
 
 // 自定义评论信息, 用于解决 unmarshal error: parsing time "2025-07-03 22:58:19" as "2006-01-02T15:04:05Z07:00"

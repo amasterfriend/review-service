@@ -16,6 +16,7 @@ func NewGRPCServer(c *conf.Server, reviewer *service.ReviewService, logger log.L
 	var opts = []grpc.ServerOption{
 		grpc.Middleware(
 			recovery.Recovery(),
+			listReviewByStoreRateLimit(c),
 			validate.ProtoValidate(),
 		),
 	}

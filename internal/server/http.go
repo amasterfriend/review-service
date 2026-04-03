@@ -16,6 +16,7 @@ func NewHTTPServer(c *conf.Server, reviewer *service.ReviewService, logger log.L
 	var opts = []http.ServerOption{
 		http.Middleware(
 			recovery.Recovery(),
+			listReviewByStoreRateLimit(c),
 			validate.ProtoValidate(),
 		),
 	}

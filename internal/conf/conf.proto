@@ -23,8 +23,16 @@ message Server {
     string addr = 2;
     google.protobuf.Duration timeout = 3;
   }
+  message RateLimit {
+    message ListReviewByStore {
+      int32 qps = 1;
+      int32 burst = 2;
+    }
+    ListReviewByStore list_review_by_store = 1;
+  }
   HTTP http = 1;
   GRPC grpc = 2;
+  RateLimit rate_limit = 3;
 }
 
 message Data {
@@ -38,8 +46,17 @@ message Data {
     google.protobuf.Duration read_timeout = 3;
     google.protobuf.Duration write_timeout = 4;
   }
+  message Cache {
+    google.protobuf.Duration hot_ttl = 1;
+    google.protobuf.Duration stale_ttl = 2;
+  }
+  message Degrade {
+    bool enable_stale_fallback = 1;
+  }
   Database database = 1;
   Redis redis = 2;
+  Cache cache = 3;
+  Degrade degrade = 4;
 }
 
 message Snowflake {

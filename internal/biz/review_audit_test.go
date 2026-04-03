@@ -58,7 +58,7 @@ func (f *fakeReviewRepo) AuditAppeal(context.Context, *AuditAppealParam) error {
 	return errors.New("not implemented")
 }
 
-func (f *fakeReviewRepo) ListReviewByStoreID(context.Context, int64, int, int) ([]*MyReviewInfo, error) {
+func (f *fakeReviewRepo) ListReviewByStoreID(context.Context, int64, int, int) (*ListReviewResult, error) {
 	return nil, errors.New("not implemented")
 }
 

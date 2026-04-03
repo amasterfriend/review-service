@@ -6,6 +6,10 @@ server:
     addr: 0.0.0.0:9000
     endpoint: 127.0.0.1:9000
     timeout: 5s
+  rate_limit:
+    list_review_by_store:
+      qps: 50
+      burst: 100
 data:
   database:
     driver: mysql
@@ -14,6 +18,11 @@ data:
     addr: 127.0.0.1:6379
     read_timeout: 0.2s
     write_timeout: 0.2s
+  cache:
+    hot_ttl: 10s
+    stale_ttl: 600s
+  degrade:
+    enable_stale_fallback: true
 snowflake:
   start_time: "2026-03-21"
   machine_id: 1

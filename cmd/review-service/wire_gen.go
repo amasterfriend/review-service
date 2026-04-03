@@ -38,17 +38,18 @@ func wireApp(confServer *conf.Server, registry *conf.Registry, confData *conf.Da
 	if err != nil {
 		return nil, nil, err
 	}
-	dataData, cleanup, err := data.NewData(db, typedClient, client, logger)
+	dataData, cleanup, err := data.NewData(confData, db, typedClient, client, logger)
 	if err != nil {
 		return nil, nil, err
 	}
 	reviewRepo := data.NewReviewRepo(dataData, logger)
 	reviewAIAuditor, err := ai.NewAIAuditor(logger)
 	if err != nil {
+		cleanup()
 		return nil, nil, err
 	}
 	reviewUsecase := biz.NewReviewUsecase(reviewRepo, reviewAIAuditor, logger)
-	reviewService := service.NewReviewService(reviewUsecase)
+	reviewService := service.NewReviewService(reviewUsecase, logger)
 	grpcServer := server.NewGRPCServer(confServer, reviewService, logger)
 	httpServer := server.NewHTTPServer(confServer, reviewService, logger)
 	app := newApp(logger, registrar, grpcServer, httpServer)
