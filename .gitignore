@@ -38,3 +38,6 @@ bin/
 *.swp
 
 .env
+
+# Elasticsearch local data
+/data/es/
